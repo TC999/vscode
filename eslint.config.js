@@ -6,6 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import tseslint from 'typescript-eslint';
+import { fileURLToPath } from 'url';
 
 import stylisticTs from '@stylistic/eslint-plugin-ts';
 import pluginLocal from 'eslint-plugin-local';
@@ -14,7 +15,7 @@ import pluginJsdoc from 'eslint-plugin-jsdoc';
 import pluginHeader from 'eslint-plugin-header';
 pluginHeader.rules.header.meta.schema = false;
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ignores = fs.readFileSync(path.join(__dirname, '.eslint-ignore'), 'utf8')
 	.toString()
 	.split(/\r\n|\n/)
@@ -155,9 +156,6 @@ export default tseslint.config(
 		],
 		languageOptions: {
 			parser: tseslint.parser,
-			parserOptions: {
-				project: path.join(__dirname, 'src', 'tsconfig.json'),
-			}
 		},
 		plugins: {
 			'@typescript-eslint': tseslint.plugin,
@@ -258,6 +256,13 @@ export default tseslint.config(
 			'local': pluginLocal,
 		},
 		rules: {
+			'no-restricted-syntax': [
+				'warn',
+				{
+					'selector': `TSArrayType > TSUnionType`,
+					'message': 'Use Array<...> for arrays of union types.'
+				},
+			],
 			'local/vscode-dts-create-func': 'warn',
 			'local/vscode-dts-literal-or-types': 'warn',
 			'local/vscode-dts-string-type-literals': 'warn',
@@ -369,6 +374,7 @@ export default tseslint.config(
 			'jsdoc/require-returns': 'warn'
 		}
 	},
+	// common/browser layer
 	{
 		files: [
 			'src/**/{common,browser}/**/*.ts'
@@ -383,6 +389,38 @@ export default tseslint.config(
 			'local/code-amd-node-module': 'warn'
 		}
 	},
+	// node/electron layer
+	{
+		files: [
+			'src/*.ts',
+			'src/**/{node,electron-main,electron-utility}/**/*.ts'
+		],
+		languageOptions: {
+			parser: tseslint.parser,
+		},
+		plugins: {
+			'local': pluginLocal,
+		},
+		rules: {
+			'no-restricted-globals': [
+				'warn',
+				'name',
+				'length',
+				'event',
+				'closed',
+				'external',
+				'status',
+				'origin',
+				'orientation',
+				'context',
+				// Below are globals that are unsupported in ESM
+				'__dirname',
+				'__filename',
+				'require'
+			]
+		}
+	},
+	// browser/electron-sandbox layer
 	{
 		files: [
 			'src/**/{browser,electron-sandbox}/**/*.ts'
@@ -700,6 +738,7 @@ export default tseslint.config(
 			]
 		}
 	},
+	// electron-utility layer
 	{
 		files: [
 			'src/**/electron-utility/**/*.ts'

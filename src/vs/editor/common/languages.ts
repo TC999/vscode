@@ -705,6 +705,9 @@ export interface InlineCompletionContext {
 	 * @internal
 	*/
 	readonly userPrompt?: string | undefined;
+
+	readonly includeInlineEdits: boolean;
+	readonly includeInlineCompletions: boolean;
 }
 
 export class SelectedSuggestionInfo {
@@ -798,9 +801,11 @@ export interface InlineCompletionsProvider<T extends InlineCompletions = InlineC
 	handleItemDidShow?(completions: T, item: T['items'][number], updatedInsertText: string): void;
 
 	/**
-	 * Will be called when an item is partially accepted.
+	 * Will be called when an item is partially accepted. TODO: also handle full acceptance here!
 	 */
 	handlePartialAccept?(completions: T, item: T['items'][number], acceptedCharacters: number, info: PartialAcceptInfo): void;
+
+	handleRejection?(completions: T, item: T['items'][number]): void;
 
 	/**
 	 * Will be called when a completions list is no longer in use and can be garbage-collected.
@@ -2338,6 +2343,7 @@ export interface IInlineEdit {
 	range: IRange;
 	accepted?: Command;
 	rejected?: Command;
+	commands?: Command[];
 }
 
 export interface IInlineEditContext {

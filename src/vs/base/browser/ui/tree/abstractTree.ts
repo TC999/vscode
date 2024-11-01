@@ -156,7 +156,7 @@ class TreeNodeListDragAndDrop<T, TFilterData, TRef> implements IListDragAndDrop<
 	}
 }
 
-function asListOptions<T, TFilterData, TRef>(modelProvider: () => ITreeModel<T, TFilterData, TRef>, options?: IAbstractTreeOptions<T, TFilterData>): IListOptions<ITreeNode<T, TFilterData>> | undefined {
+function asListOptions<T, TFilterData, TRef>(modelProvider: () => ITreeModel<T, TFilterData, TRef>, disposableStore: DisposableStore, options?: IAbstractTreeOptions<T, TFilterData>): IListOptions<ITreeNode<T, TFilterData>> | undefined {
 	return options && {
 		...options,
 		identityProvider: options.identityProvider && {
@@ -164,7 +164,7 @@ function asListOptions<T, TFilterData, TRef>(modelProvider: () => ITreeModel<T, 
 				return options.identityProvider!.getId(el.element);
 			}
 		},
-		dnd: options.dnd && new TreeNodeListDragAndDrop(modelProvider, options.dnd),
+		dnd: options.dnd && disposableStore.add(new TreeNodeListDragAndDrop(modelProvider, options.dnd)),
 		multipleSelectionController: options.multipleSelectionController && {
 			isSelectionSingleChangeEvent(e) {
 				return options.multipleSelectionController!.isSelectionSingleChangeEvent({ ...e, element: e.element } as any);
@@ -1428,8 +1428,20 @@ class StickyScrollController<T, TFilterData, TRef> extends Disposable {
 				return;
 			}
 
-			const renderedNodes = e.elements.filter(node => state.contains(node));
-			if (renderedNodes) {
+			// If a sticky node is removed, recompute the state
+			const hasRemovedStickyNode = e.deleteCount > 0 && state.stickyNodes.some(stickyNode => !this.model.has(this.model.getNodeLocation(stickyNode.node)));
+			if (hasRemovedStickyNode) {
+				this.update();
+				return;
+			}
+
+			// If a sticky node is updated, rerender the widget
+			const shouldRerenderStickyNodes = state.stickyNodes.some(stickyNode => {
+				const listIndex = this.model.getListIndex(this.model.getNodeLocation(stickyNode.node));
+				return listIndex >= e.start && listIndex < e.start + e.deleteCount && state.contains(stickyNode.node);
+			});
+
+			if (shouldRerenderStickyNodes) {
 				this._widget.rerender();
 			}
 		}));
@@ -2708,7 +2720,7 @@ export abstract class AbstractTree<T, TFilterData, TRef> implements IDisposable 
 		this.focus = new Trait(() => this.view.getFocusedElements()[0], _options.identityProvider);
 		this.selection = new Trait(() => this.view.getSelectedElements()[0], _options.identityProvider);
 		this.anchor = new Trait(() => this.view.getAnchorElement(), _options.identityProvider);
-		this.view = new TreeNodeList(_user, container, this.treeDelegate, this.renderers, this.focus, this.selection, this.anchor, { ...asListOptions(() => this.model, _options), tree: this, stickyScrollProvider: () => this.stickyScrollController });
+		this.view = new TreeNodeList(_user, container, this.treeDelegate, this.renderers, this.focus, this.selection, this.anchor, { ...asListOptions(() => this.model, this.disposables, _options), tree: this, stickyScrollProvider: () => this.stickyScrollController });
 
 		this.setupModel(this.model); // model needs to be setup after the traits have been created
 
