@@ -10,7 +10,6 @@ import { renderLabelWithIcons } from '../../../../base/browser/ui/iconLabel/icon
 import { IAction } from '../../../../base/common/actions.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
-import { IMarkdownString } from '../../../../base/common/htmlContent.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { constObservable, derived, IObservable, ISettableObservable, observableValue } from '../../../../base/common/observable.js';
 import { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -23,7 +22,7 @@ import { Selection } from '../../../../editor/common/core/selection.js';
 import { DetailedLineRangeMapping, RangeMapping } from '../../../../editor/common/diff/rangeMapping.js';
 import { ICodeEditorViewState, ScrollType } from '../../../../editor/common/editorCommon.js';
 import { ITextModel } from '../../../../editor/common/model.js';
-import { IResolvedTextEditorModel, ITextModelService } from '../../../../editor/common/services/resolverService.js';
+import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -79,17 +78,6 @@ export interface IInlineChatWidgetConstructionOptions {
 	inZoneWidget?: boolean;
 }
 
-export interface IInlineChatMessage {
-	message: IMarkdownString;
-	requestId: string;
-}
-
-export interface IInlineChatMessageAppender {
-	appendContent(fragment: string): void;
-	cancel(): void;
-	complete(): void;
-}
-
 export class InlineChatWidget {
 
 	protected readonly _elements = h(
@@ -115,9 +103,6 @@ export class InlineChatWidget {
 
 	protected readonly _onDidChangeHeight = this._store.add(new Emitter<void>());
 	readonly onDidChangeHeight: Event<void> = Event.filter(this._onDidChangeHeight.event, _ => !this._isLayouting);
-
-	private readonly _onDidChangeInput = this._store.add(new Emitter<this>());
-	readonly onDidChangeInput: Event<this> = this._onDidChangeInput.event;
 
 	private readonly _requestInProgress = observableValue(this, false);
 	readonly requestInProgress: IObservable<boolean> = this._requestInProgress;
@@ -328,11 +313,16 @@ export class InlineChatWidget {
 	}
 
 	layout(widgetDim: Dimension) {
+		const contentHeight = this.contentHeight;
 		this._isLayouting = true;
 		try {
 			this._doLayout(widgetDim);
 		} finally {
 			this._isLayouting = false;
+
+			if (this.contentHeight !== contentHeight) {
+				this._onDidChangeHeight.fire();
+			}
 		}
 	}
 
@@ -394,18 +384,8 @@ export class InlineChatWidget {
 		this._chatWidget.setInput(value);
 	}
 
-
-	selectAll(includeSlashCommand: boolean = true) {
-		// DEBT@jrieken
-		// REMOVE when agents are adopted
-		let startColumn = 1;
-		if (!includeSlashCommand) {
-			const match = /^(\/\w+)\s*/.exec(this._chatWidget.inputEditor.getModel()!.getLineContent(1));
-			if (match) {
-				startColumn = match[1].length + 1;
-			}
-		}
-		this._chatWidget.inputEditor.setSelection(new Selection(1, startColumn, Number.MAX_SAFE_INTEGER, 1));
+	selectAll() {
+		this._chatWidget.inputEditor.setSelection(new Selection(1, 1, Number.MAX_SAFE_INTEGER, 1));
 	}
 
 	set placeholder(value: string) {
@@ -429,7 +409,7 @@ export class InlineChatWidget {
 		this._onDidChangeHeight.fire();
 	}
 
-	async getCodeBlockInfo(codeBlockIndex: number): Promise<IResolvedTextEditorModel | undefined> {
+	async getCodeBlockInfo(codeBlockIndex: number): Promise<ITextModel | undefined> {
 		const { viewModel } = this._chatWidget;
 		if (!viewModel) {
 			return undefined;
